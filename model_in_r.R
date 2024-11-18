@@ -1,0 +1,241 @@
+# Load necessary libraries
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(MASS)
+library(ordinal)
+
+## Este es un cambio menor
+
+# Load the data
+data_01 <- read_excel("pyday/data/data_final.xlsx", sheet = "data")
+
+# Check data types
+str(data_01)
+
+# Summary statistics
+summary_data_01 <- summary(data_01)
+
+# Transformations
+data_01 <- data_01 %>%
+  mutate(tipo_cliente = case_when(
+    NPS >= 9 ~ "Promotor",
+    NPS >= 7 & NPS < 9 ~ "Neutro",
+    TRUE ~ "Detractor"
+  ))
+
+# Count by tipo_cliente
+table(data_01$tipo_cliente)
+
+
+# Convert 'tipo_cliente' to ordered factor
+data_01$tipo_cliente <- factor(data_01$tipo_cliente, levels = c("Detractor", "Neutro", "Promotor"), ordered = TRUE)
+
+# Convert 'NPS' to ordered factor
+data_01$NPS <- factor(data_01$NPS, levels = 0:10, ordered = TRUE)
+
+# Count by NPS
+table(data_01$NPS)
+
+##### Gráfico para la distribución de casos:
+
+plot_01 <- ggplot(data_01, aes(x = tipo_cliente)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(
+    title = "Distribución de casos por NPS",
+    x = "Tipo de clientes NPS",
+    y = "Cantidad"
+  ) +
+theme_minimal()
+
+plot_01
+
+
+# Count by Market
+table(data_01$Market)
+
+# Convert 'Market' to a factor
+data_01$Market <- as.factor(data_01$Market)
+
+
+plot_02 <- ggplot(data_01, aes(x = Market)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(
+    title = "Distribución de casos por mercado",
+    x = "Mercados",
+    y = "Cantidad"
+  ) +
+theme_minimal()
+
+plot_02
+
+
+## Combinamos
+
+plot_03 <- ggplot(data_01, aes(x = Market, fill = tipo_cliente)) +
+  geom_bar(position = "dodge", color = "black") + 
+  labs(
+    title = "Distribución de casos por Mercado y NPS",
+    x = "Mercados y Tipo de clientes NPS",
+    y = "Cantidad"
+  ) +
+  theme_minimal()
+
+# Print the plot
+plot_03
+
+
+####
+
+# Calculate NPS by Market and add a total row
+nps_by_market <- data_01 %>%
+  group_by(Market) %>%
+  summarise(
+    promoters_count = sum(tipo_cliente == "Promotor"),
+    detractors_count = sum(tipo_cliente == "Detractor"),
+    total_responses = n(),
+    nps = ((promoters_count - detractors_count) / total_responses) * 100
+  )
+
+# Calculate total NPS for all markets
+total_nps <- data_01 %>%
+  summarise(
+    promoters_count = sum(tipo_cliente == "Promotor"),
+    detractors_count = sum(tipo_cliente == "Detractor"),
+    total_responses = n(),
+    nps = ((promoters_count - detractors_count) / total_responses) * 100
+  ) %>%
+  mutate(Market = "Total")  # Add a label for the total row
+
+# Combine the results
+nps_with_total <- bind_rows(nps_by_market, total_nps)
+
+# View the results
+nps_with_total
+
+nps_with_total$Market <- factor(nps_with_total$Market, levels = c("Total", "MEX", "US", "UK"))  # Adjust to your actual market names
+
+
+# Grouped (side-by-side) bar plot
+plot_04 <- ggplot(nps_with_total, aes(x = Market, y = nps)) +
+  geom_col(fill = "skyblue", color = "black") +  # 'dodge' for side-by-side
+  labs(
+    title = "Cálculo de NPS",
+    x = "Mercado",
+    y = "NPS"
+  ) +
+  theme_minimal()
+
+# Print the plot
+plot_04
+
+
+# Create dummy variables for 'Market'
+market_dummies <- model.matrix(~ Market - 1, data_01)
+
+# Convert the dummy matrix to a data frame
+market_dummies_df <- as.data.frame(market_dummies)
+
+# Combine the original data with the dummy variables
+data_01 <- cbind(data_01, market_dummies_df)
+
+## MODELOS
+
+# Model fitting using ordered logit (proportional odds model)
+mod_log_01 <- clm(tipo_cliente ~ `Driver 1` + `Driver 2` + `Driver 3`, 
+                  data = data_01, link = "logit")
+
+# Model summary
+summary(mod_log_01)
+
+# Get the model summary
+mod_summary <- summary(mod_log_01)
+
+# Extract coefficients (variables only, excluding thresholds)
+coef_data <- data.frame(
+  Variable = rownames(mod_summary$coefficients),
+  Estimate = mod_summary$coefficients[, 1],
+  Std_Error = mod_summary$coefficients[, 2],
+  z_value = mod_summary$coefficients[, 3],
+  p_value = mod_summary$coefficients[, 4]
+)
+
+# Filter out the thresholds (we don't need them)
+coef_data <- coef_data[grepl("Driver", coef_data$Variable), ]
+
+# Exponentiate the coefficients to get the odds ratios
+coef_data$Odds_Ratio = exp(coef_data$Estimate)
+
+# Calculate 95% Confidence Intervals for Odds Ratios
+coef_data$CI_Lower = exp(coef_data$Estimate - 1.96 * coef_data$Std_Error)
+coef_data$CI_Upper = exp(coef_data$Estimate + 1.96 * coef_data$Std_Error)
+
+# Create a new column for significance based on p-value
+coef_data$Significant <- ifelse(coef_data$p_value < 0.05, "Significativa", "No significativa")
+
+# Plotting odds ratios
+plot_summary_01 <- ggplot(coef_data, aes(x = reorder(Variable, Odds_Ratio), y = Odds_Ratio, color = Significant)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.2) +
+  labs(
+    title = "Impacto de variables: modelo 01",
+    x = "Variables",
+    y = "Probabilidad",
+    color = "Significancia"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Print the plot
+plot_summary_01
+
+## Modelo 03
+mod_log_02 <- clm(tipo_cliente ~ `Driver 1` + `Driver 2` + `Driver 3` + Edad, data = data_01, link = "logit")
+
+# Model 03 summary
+summary(mod_log_02)
+
+# Get the model summary
+mod_summary <- summary(mod_log_02)
+
+# Extract coefficients (variables only, excluding thresholds)
+coef_data <- data.frame(
+  Variable = rownames(mod_summary$coefficients),
+  Estimate = mod_summary$coefficients[, 1],
+  Std_Error = mod_summary$coefficients[, 2],
+  z_value = mod_summary$coefficients[, 3],
+  p_value = mod_summary$coefficients[, 4]
+)
+
+# Filter out the thresholds (we don't need them)
+coef_data <- coef_data[grepl("Driver|Edad", coef_data$Variable), ]
+
+# Exponentiate the coefficients to get the odds ratios
+coef_data$Odds_Ratio = exp(coef_data$Estimate)
+
+# Calculate 95% Confidence Intervals for Odds Ratios
+coef_data$CI_Lower = exp(coef_data$Estimate - 1.96 * coef_data$Std_Error)
+coef_data$CI_Upper = exp(coef_data$Estimate + 1.96 * coef_data$Std_Error)
+
+# Create a new column for significance based on p-value
+coef_data$Significant <- ifelse(coef_data$p_value < 0.05, "Significativa", "No significativa")
+
+# Plotting odds ratios
+plot_summary_02 <- ggplot(coef_data, aes(x = reorder(Variable, Odds_Ratio), y = Odds_Ratio, color = Significant)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.2) +
+  labs(
+    title = "Impacto de variables: modelo 02",
+    x = "Variables",
+    y = "Probabilidad",
+    color = "Significancia"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Print the plot
+plot_summary_02
+
+
+
+
