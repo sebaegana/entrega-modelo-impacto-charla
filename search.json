@@ -4,7 +4,7 @@
     "href": "index.html",
     "title": "entrega-modelo-impacto-charla",
     "section": "",
-    "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites.\n\n1 + 1\n\n[1] 2"
+    "text": "Análisis descriptivo:\nSe muestra a continuación el recuento de casos por NPS contestado:\n\n\n\n\n\n\n\n\n\nPor otra parte, la cantidad de encuestas contestadas por mercado:\n\n\n\n\n\n\n\n\n\nSe observa la distribución de NPS por mercado\n\n\n\n\n\n\n\n\n\nEl cálculo de NPS total y para cada mercado\n\n\n\n\n\n\n\n\n\n\n\nModelos de impacto\nSe define el primer modelo como:\n\\[\n\\text{logit}(P(Y \\leq j)) = \\alpha_j - (\\beta_1 \\cdot \\text{Driver 1}) - (\\beta_2 \\cdot \\text{Driver 2}) - (\\beta_3 \\cdot \\text{Driver 3})\n\\]\nEl impacto de las variables del modelo 01:\n\n\n\n\n\n\n\n\n\nSe define el segundo modelo como:\n\\[\n\\text{logit}(P(Y \\leq j)) = \\alpha_j - (\\beta_1 \\cdot \\text{Driver 1}) - (\\beta_2 \\cdot \\text{Driver 2}) - (\\beta_3 \\cdot \\text{Driver 3}) - (\\beta_4 \\cdot \\text{Edad})\n\\]\nEl impacto de las variables del modelo 02:"
   },
   {
     "objectID": "about.html",
